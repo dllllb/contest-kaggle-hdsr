@@ -9,7 +9,6 @@ from nltk.corpus import stopwords
 from gensim import matutils
 from gensim.models import Word2Vec
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import cross_val_score
 from sklearn.decomposition import TruncatedSVD
 from sklearn.ensemble.forest import RandomForestRegressor
@@ -272,13 +271,13 @@ class QueryMatchScoreTransformer(BaseEstimator, TransformerMixin):
 def dataset(query_file):
     q_df = pd.read_csv(query_file, encoding='ISO-8859-1', index_col='id')    
     
-    if os.path.exists('attributes.csv.gz'):
+    if os.path.exists('data/attributes.csv.gz'):
         df_attr = pd.read_csv('attributes.csv.gz').dropna()
     else:
         df_attr = pd.read_csv('attributes-sample1k.csv.gz').dropna()
     df_attr['product_uid'] = df_attr['product_uid'].astype(int)
 
-    if os.path.exists('product_descriptions.csv.gz'):
+    if os.path.exists('data/product_descriptions.csv.gz'):
         prod_df = pd.read_csv(
             'product_descriptions.csv.gz',
             encoding='ISO-8859-1',
@@ -289,7 +288,6 @@ def dataset(query_file):
             encoding='ISO-8859-1',
             index_col='product_uid')
 
-    #prod_df['product_description'] = prod_df.product_description
     df_attr['product_uid'] = df_attr['product_uid'].astype(int)
     df_brand = df_attr[df_attr.name == "MFG Brand Name"][["product_uid", "value"]]\
         .rename(columns={"value": "brand"}).set_index("product_uid")
@@ -454,17 +452,17 @@ def transf_tfidf_br_clean():
     return make_union(
         make_pipeline(
             column_transformer('search_term'),
-            tfidf_vec2(),
+            tfidf_vec(),
             tsvd(),
         ),
         make_pipeline(
             column_transformer('product_title'),
-            tfidf_vec2(),
+            tfidf_vec(),
             tsvd(),
         ),
         make_pipeline(
             column_transformer('brand'),
-            tfidf_vec2(),
+            tfidf_vec(),
             tsvd(),
         ),
     )
@@ -520,7 +518,7 @@ def validate(params):
     elif transf_type == 'cnt+wv':
         transf = make_union(transf_count(), transf_wv())
     elif transf_type == 'tfidf':
-        transf = transf_tfidf()
+        transf = tfidf_transf()
     elif transf_type == 'qm+br':
         transf = make_union(transf_qm(), transf_br())
     elif transf_type == 'qm+br+idf':
@@ -538,12 +536,12 @@ def validate(params):
         transf = make_union(transf_qm, transf_qms, transf_wv)
     elif transf_type == 'qm+qma+qms+wv+idf':
         make_union(
-            transf_qm,
-            transf_qma,
-            transf_qms,
-            transf_wv,
-            transf_br,
-            transf_tfidf3)
+            transf_qm(),
+            transf_qma(),
+            transf_qms(),
+            transf_wv(),
+            transf_br(),
+            tfidf_transf())
     
     est_type = params['est_type']
     if est_type == 'xgb':
