@@ -545,7 +545,7 @@ def validate(params):
     elif transf_type == 'qm+qms+wv':
         transf = make_union(transf_qm, transf_qms, transf_wv)
     elif transf_type == 'qm+qma+qms+wv+idf':
-        make_union(
+        transf = make_union(
             transf_qm(),
             transf_qma(),
             transf_qms(),
