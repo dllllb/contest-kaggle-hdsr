@@ -9,7 +9,7 @@ from nltk.corpus import stopwords
 from gensim import matutils
 from gensim.models import Word2Vec
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_score, train_test_split
 from sklearn.decomposition import TruncatedSVD
 from sklearn.ensemble.forest import RandomForestRegressor
 from sklearn.feature_extraction import DictVectorizer
@@ -17,8 +17,7 @@ from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from sklearn.metrics import mean_squared_error
 from sklearn.pipeline import make_union, make_pipeline
 from sklearn.preprocessing import FunctionTransformer
-
-import ds_tools.dstools.ml.xgboost_tools as xgb
+from xgboost import XGBRegressor
 
 
 def update_model_stats(stats_file, params, results):
@@ -125,6 +124,9 @@ class CleanupStemTokenizer:
     
 class StopwordTokenizer:
     def __init__(self):
+        import os
+        os.environ['NLTK_DATA'] = os.path.abspath(os.path.dirname(__file__))
+        from nltk.corpus import stopwords
         self.stopwords = set(stopwords.words("english"))
 
     def tokenize(self, text):
@@ -490,8 +492,8 @@ def init_params(overrides):
 
 def init_xgb_est(params):
     keys = {
-        'eta',
-        'num_rounds',
+        'learning_rate',
+        'n_estimators',
         'max_depth',
         'min_child_weight',
         'subsample',
@@ -500,12 +502,20 @@ def init_xgb_est(params):
     
     xgb_params = {
         "objective": "reg:linear",
-        "silent": 0,
-        "verbose": 120,
         **{k: v for k, v in params.items() if k in keys},
     }
-    
-    return xgb.XGBoostRegressor(**xgb_params)
+
+    class XGBC(XGBRegressor):
+        def fit(self, x, y, **kwargs):
+            f_train, f_val, t_train, t_val = train_test_split(x, y, test_size=.05)
+            super().fit(
+                f_train,
+                t_train,
+                eval_set=[(f_val, t_val)],
+                early_stopping_rounds=50,
+                verbose=120)
+
+    return XGBC(**xgb_params)
 
 
 def validate(params):    
@@ -542,6 +552,8 @@ def validate(params):
             transf_wv(),
             transf_br(),
             tfidf_transf())
+    else:
+        raise AssertionError(f'unknown transformer type: {transf_type}')
     
     est_type = params['est_type']
     if est_type == 'xgb':
@@ -552,6 +564,8 @@ def validate(params):
             n_jobs=1,
             max_features=params['max_features'],
             max_depth=params['max_depth'])
+    else:
+        raise AssertionError(f'unknown estimator type: {est_type}')
         
     return cv_test((transf, est), n_folds=params['n_folds'])
 
